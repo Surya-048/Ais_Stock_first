@@ -303,7 +303,6 @@ public class DeviceRenewalRequestServiceImpl implements DeviceRenewalRequestServ
     @Override
     public PaginationV2<?> getDeviceRenewalRequest(String reqCode, int pageNo, int pageSize) {
 
-
         Optional<DeviceRenewalRequest> byReqCode = null;
         if (reqCode != null && !reqCode.equals("") && !reqCode.isEmpty()) {
 

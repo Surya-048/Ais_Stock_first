@@ -19,8 +19,12 @@ public class Response<T> {
 	private String requestCode;
 	private T data;
 
+    public Response ( ) {
 
-	public String getRequestCode() {
+    }
+
+
+    public String getRequestCode() {
 		return requestCode;
 	}
 

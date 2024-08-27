@@ -34,10 +34,10 @@ public class DeviceRenewalController {
         return new ResponseEntity<>(deviceRenewalRequest, HttpStatus.OK);
     }
 
-    @PostMapping(path = "/get/one/device_renewal_request/{reqCode}")
-    public  ResponseEntity<?> getDeviceRenewalRequest(@PathVariable("reqCode")String reqCode,@RequestBody GenericRequestBody genericRequestBody){
+    @GetMapping(path = "/get/one/device_renewal_request/{reqId}")
+    public  ResponseEntity<?> getDeviceRenewalRequest(@PathVariable("reqId")Long reqId){
 
-        PaginationV2<?> renewalRequest = this.deviceRenewalRequestService.getDeviceRenewalRequest(reqCode,genericRequestBody.getPageNo(),genericRequestBody.getPageSize());
+        Response<?> renewalRequest = this.deviceRenewalRequestService.getDeviceRenewalRequest(reqId);
 
         return ResponseEntity.ok(renewalRequest);
     }

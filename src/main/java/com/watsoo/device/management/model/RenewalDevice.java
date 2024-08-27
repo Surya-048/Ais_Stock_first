@@ -14,11 +14,22 @@ public class RenewalDevice {
     @Column(name = "device_id")
     private Long deviceId;
 
-
-
     @ManyToOne(fetch = FetchType.LAZY,cascade = CascadeType.PERSIST)
     @JoinColumn(name = "request_id", referencedColumnName = "id")
     private DeviceRenewalRequest deviceRenewalRequest;
+
+    @Column(name = "imei_no")
+    private String imeiNo;
+
+    @Column(name = "iccid_no")
+    private String iccidNo;
+
+    @Column(name = "old_expiry_date")
+    private Date oldExpiryDate;
+
+    @Column(name = "new_expiry_date")
+    private Date newExpiryDate;
+
 
     public RenewalDevice() {
     }
@@ -51,18 +62,6 @@ public class RenewalDevice {
     public void setDeviceRenewalRequest(DeviceRenewalRequest deviceRenewalRequest) {
         this.deviceRenewalRequest = deviceRenewalRequest;
     }
-
-    @Column(name = "imei_no")
-    private String imeiNo;
-
-    @Column(name = "iccid_no")
-    private String iccidNo;
-
-    @Column(name = "old_expiry_date")
-    private Date oldExpiryDate;
-
-    @Column(name = "new_expiry_date")
-    private Date newExpiryDate;
 
     public Long getId() {
         return id;

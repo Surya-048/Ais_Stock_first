@@ -16,23 +16,11 @@ public class DeviceRenewalRequest {
     @Column(name = "req_code")
     private String reqCode;
 
-    @Override
-    public String toString() {
-        return "DeviceRenewalRequest{" +
-                "id=" + id +
-                ", reqCode='" + reqCode + '\'' +
-                ", createdAt=" + createdAt +
-                ", createdBy=" + createdBy +
-                '}';
-    }
-
     @Column(name = "created_at")
     private Date createdAt;
 
     @Column(name = "created_by")
     private Long createdBy;
-
-
 
     public Long getId() {
         return id;
@@ -65,5 +53,17 @@ public class DeviceRenewalRequest {
     public void setCreatedBy(Long createdBy) {
         this.createdBy = createdBy;
     }
+
+
+    @Override
+    public String toString() {
+        return "DeviceRenewalRequest{" +
+                "id=" + id +
+                ", reqCode='" + reqCode + '\'' +
+                ", createdAt=" + createdAt +
+                ", createdBy=" + createdBy +
+                '}';
+    }
+
 
 }

@@ -28,11 +28,10 @@ public class DeviceRenewalRequestServiceImpl implements DeviceRenewalRequestServ
 
     Logger logger = LoggerFactory.getLogger(DeviceRenewalRequestServiceImpl.class);
 
-    @Autowired
-    private DeviceRenewalRequestRepository deviceRenewalRequestRepository;
 
-    @Autowired
-    private RenewalDeviceRepository renewalDeviceRepository;
+    //for storing all the requests in hashMap mapping with id for servicing like caching
+    HashMap<Long,DeviceRenewalRequest> renewalRequestsMap = new HashMap<>();
+    HashMap<Long,List<RenewalDevice>> renewalDevicesList = new HashMap<>();
 
     @Autowired
     private DeviceRepository deviceRepository;
@@ -43,240 +42,233 @@ public class DeviceRenewalRequestServiceImpl implements DeviceRenewalRequestServ
     @Autowired
     private UserRepository userRepository;
 
-    private static RenewalDevice renewalDevice;
+//    private static RenewalDevice renewalDevice;
 
-    private static DeviceRenewalSavedDataResponse deviceRenewalSavedDataResponse = null;
+    private static DeviceRenewalSavedDataResponse deviceRenewalSavedDataResponse=null;
 
     @Autowired
     private DeviceLazyRepository deviceLazyRepository;
+    @Autowired
+    private DeviceRenewalRequestRepository deviceRenewalRequestRepository;
 
-    int iccidNotFoundCount = 0;
+    @Autowired
+    private RenewalDeviceRepository renewalDeviceRepository;
 
+    int iccidNotFoundCount=0;
     @Override
     public Response<?> saveDeviceRenewalRequest(DeviceRenewalRequestDTO deviceRenewalRequestDTO) {
 
-        //To fetch total no of request code present in DB
-        int total_request_code = deviceRenewalRequestRepository.countTotalItems();
-
+        Optional<User> user= userRepository.findById( deviceRenewalRequestDTO.getUserId());
 
         String requestCode = generateRequestCode();
-
-        Optional<User> user = userRepository.findById(deviceRenewalRequestDTO.getUserId());
-
-        DeviceRenewalRequest deviceRenewalRequest = new DeviceRenewalRequest();
-        if (user.isPresent()) {
-
-            deviceRenewalRequest.setCreatedBy(deviceRenewalRequestDTO.getUserId());
-        } else {
-            return new Response<>(HttpStatus.NOT_FOUND.value(), "User doesnot exists");
+        if(user.isPresent()==false){
+            new Response<>(HttpStatus.NOT_FOUND.value(), "User doesnot exists");
         }
 
+//         DeviceRenewalRequest deviceRenewalRequest=new DeviceRenewalRequest();
+//         deviceRenewalRequest.setCreatedBy(user.get().getId());
+//         deviceRenewalRequest.setReqCode(requestCode);
+
+        List<DeviceRenewalSavedDataResponse> deviceRenewalSavedDataResponses = new ArrayList<>();
+
+        List<DeviceRenewal> deviceRenewalList= deviceRenewalRequestDTO.getDeviceRenewalList();
+        List<String> iccidNosList=new ArrayList<>();
+
+        deviceRenewalList.stream().forEach(item->iccidNosList.add(item.getIccidNo()));
+
+        List<Device> foundDevices=  deviceRepository.findByIccidNoIn(iccidNosList);
+
+        Map<String,Device> deviceMap = foundDevices.stream().collect(Collectors.toMap(Device::getIccidNo,device -> device));
+
+        //Test This
+//         Map<String,Device> deviceMap = foundDevices.stream().collect(Collectors.toMap(e->e.getIccidNo(),e -> e));
+
+        this.iccidNotFoundCount=0;
+
+        SimpleDateFormat inputFormat = new SimpleDateFormat("dd-MM-yyyy");
+
+        DeviceRenewalRequest deviceRenewalRequest=new DeviceRenewalRequest();
+        deviceRenewalRequest.setCreatedBy(user.get().getId());
         deviceRenewalRequest.setReqCode(requestCode);
         deviceRenewalRequest.setCreatedAt(new Date());
 
+        for(DeviceRenewal item:deviceRenewalList){
+            String iccidNo=item.getIccidNo();
 
-        //Saving the DeviceRenewalRequest into DB
-//        DeviceRenewalRequest  savedDeviceRenewalObject = deviceRenewalRequestRepository.save(deviceRenewalRequest);
+            DeviceRenewalSavedDataResponse deviceRenewalSavedDataResponse=new DeviceRenewalSavedDataResponse();
+            RenewalDevice renewalDevice=new RenewalDevice();
 
-        //Long requestId = savedDeviceRenewalObject.getId();
-
-        List<DeviceRenewal> deviceRenewalsList = deviceRenewalRequestDTO.getDeviceRenewalList();
-        List<DeviceRenewalSavedDataResponse> deviceRenewalSavedDataResponses = new ArrayList<>();
-//        List<DeviceRenewalSavedDataResponse> deviceRenewalUnSavedDataResponses = new ArrayList<>();
-
-        int deviceRenewalListSize = deviceRenewalsList.size();
-
-        this.iccidNotFoundCount = 0;
-        deviceRenewalsList.stream().forEach(item -> {
-
-            String iccidNo = item.getIccidNo();
-
-            deviceRenewalSavedDataResponse = new DeviceRenewalSavedDataResponse();
-
-            Optional<Device> deviceOptional = deviceRepository.findByIccidNo(iccidNo);
-
-            renewalDevice = new RenewalDevice();
-
-            if (deviceOptional.isPresent()) {
-
-                Device device = deviceOptional.get();
+            if(deviceMap.containsKey(iccidNo)){
+                Device device=deviceMap.get(iccidNo);
                 renewalDevice.setDeviceId(device.getId());
                 renewalDevice.setImeiNo(device.getImeiNo());
                 renewalDevice.setIccidNo(device.getIccidNo());
                 renewalDevice.setOldExpiryDate(device.getSim2ExpiryDate());
 
                 deviceRenewalSavedDataResponse.setIccidNo(device.getIccidNo());
-                SimpleDateFormat inputFormat = new SimpleDateFormat("dd-MM-yyyy");
-
 
                 try {
-                    if (item.getDate() != null) {
-                        Date date = inputFormat.parse(item.getDate());
-                        renewalDevice.setNewExpiryDate(date);
-                       Optional< DeviceLazyEntity> deviceLazyEntityOptional= this.deviceLazyRepository.findByIccidNo(device.getIccidNo());
-                           if(deviceLazyEntityOptional.isPresent()){
-                               DeviceLazyEntity deviceLazyEntity= deviceLazyEntityOptional.get();
-                               deviceLazyEntity.setSim1ExpiryDate(date);
-                               deviceLazyEntity.setSim2ExpiryDate(date);
-                               this.deviceLazyRepository.save(deviceLazyEntity);
-                           }
-
-
-                    } else {
-                        renewalDevice.setNewExpiryDate(null);
-                    }
-                    DeviceRenewalRequest savedDeviceRenewalObject = deviceRenewalRequestRepository.save(deviceRenewalRequest);
-                    renewalDevice.setDeviceRenewalRequest(savedDeviceRenewalObject);
-                    RenewalDevice renewalDevice1 = renewalDeviceRepository.save(renewalDevice);
-
-                    deviceRenewalSavedDataResponse.setNewExpiryDate(renewalDevice1.getNewExpiryDate());
-                    deviceRenewalSavedDataResponse.setUpdated(true);
-                    deviceRenewalSavedDataResponses.add(deviceRenewalSavedDataResponse);
+                    Date date=inputFormat.parse(item.getDate());
+                    renewalDevice.setNewExpiryDate(date);
                 } catch (ParseException e) {
                     throw new RuntimeException(e);
                 }
-            } else {
 
-                SimpleDateFormat inputFormat = new SimpleDateFormat("dd-MM-yyyy");
-                Date date = null;
+                //only Saving DeviceRenewalRequestObject to Data Base when the device id is found so no new request code is generated
+                DeviceRenewalRequest savedDeviceRenewalRequestObject= deviceRenewalRequestRepository.save(deviceRenewalRequest);
+
+                //saving RenewalDevice Object to DB
+                renewalDevice.setDeviceRenewalRequest(savedDeviceRenewalRequestObject);
+                RenewalDevice savedRenewalDeviceObject= renewalDeviceRepository.save(renewalDevice);
+
+                //For Updating in DashBoard
+                device.setSim1ExpiryDate(savedRenewalDeviceObject.getNewExpiryDate());
+                device.setSim2ExpiryDate(savedRenewalDeviceObject.getNewExpiryDate());
+                device.setUpdatedAt(new Date());
+                device.setModifiedBy(user.get().getId());
+                deviceRepository.save(device);
+
+
+                deviceRenewalSavedDataResponse.setNewExpiryDate(savedRenewalDeviceObject.getNewExpiryDate());
+                deviceRenewalSavedDataResponse.setUpdated(true);
+
+
+            }
+            else{
+                //No Such ICCID Found
                 try {
-                    date = inputFormat.parse(item.getDate());
+                    Date date = inputFormat.parse(item.getDate());
                     deviceRenewalSavedDataResponse.setNewExpiryDate(date);
                 } catch (ParseException e) {
                     throw new RuntimeException(e);
                 }
                 deviceRenewalSavedDataResponse.setUpdated(false);
                 deviceRenewalSavedDataResponse.setIccidNo(iccidNo);
-
-                deviceRenewalSavedDataResponses.add(deviceRenewalSavedDataResponse);
-
-                iccidNotFoundCount = iccidNotFoundCount + 1;
-                //throw new ResourceNotFoundException("ICCID not found");
-
+                iccidNotFoundCount++;
             }
+            deviceRenewalSavedDataResponses.add(deviceRenewalSavedDataResponse);
+        }
 
-        });
 
         if (iccidNotFoundCount == 0) {
-            return new Response<>(HttpStatus.OK.value(), deviceRenewalSavedDataResponses, "Updated  Successfully", requestCode);
-        } else if (iccidNotFoundCount == deviceRenewalListSize) {
-            System.out.println("**&(*&*&*&*&*&ICCIDNOTFOUNDCOUNT= " + iccidNotFoundCount);
-
-            return new Response<>(HttpStatus.NOT_FOUND.value(), deviceRenewalSavedDataResponses, "No Such  ICCID's  FOUND", requestCode);
-        } else if (iccidNotFoundCount > 0) {
-            System.out.println("&^&^&^&^&^ICCIDNOTFOUNDCOUNT= " + iccidNotFoundCount);
-
-            return new Response<>(HttpStatus.OK.value(), deviceRenewalSavedDataResponses, "Updated Successfully with some unsucessful attempts (No such  Iccid Found)", requestCode);
-
+            return new Response<>(HttpStatus.OK.value(),   deviceRenewalSavedDataResponses,"Updated Successfully",requestCode);
+        } else if (iccidNotFoundCount == deviceRenewalList.size()) {
+            return new Response<>(HttpStatus.NOT_FOUND.value(),  deviceRenewalSavedDataResponses,"No Such ICCIDs Found", requestCode);
         } else {
-            return null;
+            return new Response<>(HttpStatus.PARTIAL_CONTENT.value(),   deviceRenewalSavedDataResponses,"Updated Successfully with some unsuccessful attempts (No such ICCID Found)", requestCode);
         }
 
     }
 
-
     private String generateRequestCode() {
-
         String businessPrefix = "REQ";
         UUID uuid = UUID.randomUUID();
         String uniqueRequestCode = businessPrefix + "-" + uuid.toString();
-        return uniqueRequestCode;
+        return  uniqueRequestCode;
     }
 
     @Override
     public PaginationV2<?> getDeviceRenewalRequest(GenericRequestBody genericRequestBody) {
 
-        PageRequest pageRequest = PageRequest.of(genericRequestBody.getPageNo(), genericRequestBody.getPageSize(), Sort.Direction.DESC, "created_at");
+        PageRequest pageRequest = PageRequest.of(genericRequestBody.getPageNo(), genericRequestBody.getPageSize(), Sort.Direction.DESC, "id");
         PaginationV2 paginationV2 = new PaginationV2();
 
         Page<DeviceRenewalRequest> deviceRenewalRequestsPaging = null;
 
-        if (genericRequestBody.getSearch() != null && !genericRequestBody.getSearch().isEmpty() && !genericRequestBody.getSearch().equals("")) {
+        //for setting the date in genericRequestBody like timeStamp
+        if ((genericRequestBody.getFromDate() != null && genericRequestBody.getToDate() != null) && genericRequestBody.getPageSize() != 0
+                && (genericRequestBody.getFromDate() !=0 || genericRequestBody.getToDate() != 0 ) ) {
 
-            if(genericRequestBody.getSearch().matches("^[0-9]+")){
-                List<RenewalDevice> collect = this.renewalDeviceRepository
-                        .findAllByImeiNoContaining(genericRequestBody.getSearch().trim());
+            logger.info("From Date Receive : "+genericRequestBody.getFromDate());
+            logger.info("To Date Receive : "+genericRequestBody.getToDate());
 
-                HashMap<String,DeviceRenewalResponseDTO> redundantCheckingSettForRequestCode = new HashMap<>();
-                collect
-                        .forEach(renew ->
-                        {
-                            if (renew.getDeviceRenewalRequest().getReqCode() != null && !renew.getDeviceRenewalRequest().getReqCode().equals("")) {
-                                Optional<DeviceRenewalRequest> byId = this.deviceRenewalRequestRepository.findByReqCode(renew.getDeviceRenewalRequest().getReqCode());
-
-//                                logger.info("Data : " + byId.get().getId() + " " + byId.get().getReqCode() + " " + byId.get().getCreatedBy() + " " + byId.get().getCreatedAt());
-                                if (byId.isPresent() && redundantCheckingSettForRequestCode.get(byId.get().getReqCode()) == null ) {
-                                    Optional<User> user = this.userRepository.findById(byId.get().getCreatedBy());
-                                    if (user.isPresent()) {
-                                        DeviceRenewalResponseDTO deviceRenewalResponse = new DeviceRenewalResponseDTO();
-                                        deviceRenewalResponse.setRequestCode(byId.get().getReqCode());
-                                        deviceRenewalResponse.setRequestDate(byId.get().getCreatedAt());
-                                        deviceRenewalResponse.setCreatedBy(user.get().getName());
-                                        deviceRenewalResponse.setDevices(new ArrayList<>());
-                                        deviceRenewalResponse.setTotalDevices(this.renewalDeviceRepository.deviceCountForRequest(byId.get().getId()));
-                                        redundantCheckingSettForRequestCode.put(deviceRenewalResponse.getRequestCode(),deviceRenewalResponse);
-                                    }
-                                }
-                            }
-                        });
-
-                List<DeviceRenewalResponseDTO> allById = redundantCheckingSettForRequestCode
-                        .values()
-                        .stream()
-                        .collect(Collectors.toList());
-
-                List<DeviceRenewalResponseDTO> output = new ArrayList<>();
-
-                //for pagination
-
-                for(int i = (genericRequestBody.getPageNo()*genericRequestBody.getPageSize()),count = 0;i< allById.size() && count < genericRequestBody.getPageSize(); i++,++count){
-                    output.add(allById.get(i));
-                }
-
-                paginationV2.setPageSize(genericRequestBody.getPageSize());
-                paginationV2.setTotalItems(allById.size());
-                paginationV2.setItems(output);
-
-                return paginationV2;
-            }else{
-                deviceRenewalRequestsPaging = this.deviceRenewalRequestRepository.findByReqCode(genericRequestBody.getSearch(), pageRequest);
-            }
-        } else if (genericRequestBody.getFromDate() == 0 && genericRequestBody.getToDate() == 0
-                && genericRequestBody.getSearch().equals("") && genericRequestBody.getSearch().isEmpty()) {
-
-            deviceRenewalRequestsPaging = this.deviceRenewalRequestRepository.findAll(pageRequest);
-
-        } else if ((genericRequestBody.getFromDate() != null && genericRequestBody.getToDate() != null) &&
-                genericRequestBody.getPageSize() != 0) {
-
-            logger.info("From Date Receive : " + genericRequestBody.getFromDate());
-            logger.info("To Date Receive : " + genericRequestBody.getToDate());
-
-            SimpleDateFormat sdf = new SimpleDateFormat(Constant.DATE_FORMAT_YYYY_MM_DD);
+            SimpleDateFormat sdf = new SimpleDateFormat(Constant.DATE_FORMAT_YYYY_MM_DD_HH_MM_SS);
             String fromDate = sdf.format(new Date(genericRequestBody.getFromDate()));
             String toDate = sdf.format(new Date(genericRequestBody.getToDate()));
-            logger.info("After converting From Date to UTC : " + new SimpleDateFormat(Constant.DATE_FORMAT_YYYY_MM_DD_HH_MM_SS).format(new Date()));
-            logger.info("After converting To Date to UTC  :" + toDate);
+            logger.info("After converting From Date to UTC : "+ new SimpleDateFormat(Constant.DATE_FORMAT_YYYY_MM_DD_HH_MM_SS).format(genericRequestBody.getFromDate()));
+            logger.info("After converting To Date to UTC  :"+new SimpleDateFormat(Constant.DATE_FORMAT_YYYY_MM_DD_HH_MM_SS).format(genericRequestBody.getToDate()));
 
             try {
-
-                deviceRenewalRequestsPaging = this.deviceRenewalRequestRepository
-                        .findAllCreatedAtBetween(sdf.parse(fromDate), sdf.parse(toDate), pageRequest);
-
+                genericRequestBody.setFromDateToDateType(sdf.parse(fromDate));
+                genericRequestBody.setToDateToDateType(sdf.parse(toDate));
             } catch (ParseException e) {
                 throw new RuntimeException("Date Parsing Exception");
             }
         }
 
-        if (deviceRenewalRequestsPaging != null && !deviceRenewalRequestsPaging.isEmpty()) {
+//        if (genericRequestBody.getSearch() != null && !genericRequestBody.getSearch().isEmpty() && !genericRequestBody.getSearch().equals("")) {
+
+        if(genericRequestBody.getSearch().matches("^[0-9]+")){
+            List<RenewalDevice> collect = this.renewalDeviceRepository
+                    .findAllByImeiNoContaining(genericRequestBody.getSearch().trim());
+            HashMap<Long,DeviceRenewalResponseDTO> redundantCheckingSettForRequestCode = new HashMap<>();
+
+            collect
+                    .forEach(renew ->
+                    {
+                        if (renew.getDeviceRenewalRequest().getReqCode() != null && !renew.getDeviceRenewalRequest().getReqCode().equals("")) {
+                            Optional<DeviceRenewalRequest> byId = this.deviceRenewalRequestRepository.findById(renew.getDeviceRenewalRequest().getId());
+
+                            if (byId.isPresent() && redundantCheckingSettForRequestCode.get(byId.get().getId()) == null ) {
+                                Optional<User> user = this.userRepository.findById(byId.get().getCreatedBy());
+                                if (user.isPresent()) {
+                                    DeviceRenewalResponseDTO deviceRenewalResponse = new DeviceRenewalResponseDTO();
+                                    deviceRenewalResponse.setRequestId(byId.get().getId());
+                                    deviceRenewalResponse.setRequestCode(byId.get().getReqCode());
+                                    deviceRenewalResponse.setRequestDate(byId.get().getCreatedAt());
+                                    deviceRenewalResponse.setCreatedBy(user.get().getName());
+                                    deviceRenewalResponse.setDevices(new ArrayList<>());
+                                    deviceRenewalResponse.setTotalDevices(this.renewalDeviceRepository.deviceCountForRequest(byId.get().getId()));
+                                    redundantCheckingSettForRequestCode.put(deviceRenewalResponse.getRequestId(),deviceRenewalResponse);
+                                }
+                            }
+                        }
+                    });
+
+            //all the device list having given imei no
+            List<DeviceRenewalResponseDTO> allById = redundantCheckingSettForRequestCode
+                    .values()
+                    .stream()
+                    .collect(Collectors.toList());
+
+            List<DeviceRenewalResponseDTO> output = new ArrayList<>();
+
+            //for pagination
+
+            for(int i = (genericRequestBody.getPageNo()*genericRequestBody.getPageSize()),count = 0;i< allById.size() && count < genericRequestBody.getPageSize(); i++,++count){
+                output.add(allById.get(i));
+            }
+
+            paginationV2.setPageSize(genericRequestBody.getPageSize());
+            paginationV2.setTotalItems(allById.size());
+            paginationV2.setItems(output);
+
+            return paginationV2;
+//            }else{
+//                deviceRenewalRequestsPaging = this.deviceRenewalRequestRepository.findByReqCode(genericRequestBody.getSearch(), pageRequest);
+//            }
+
+//        } else if(genericRequestBody.getFromDate() == 0 && genericRequestBody.getToDate() == 0
+//                && genericRequestBody.getSearch().equals("") && genericRequestBody.getSearch().isEmpty()){
+//
+//            deviceRenewalRequestsPaging = this.deviceRenewalRequestRepository.findAll(pageRequest);
+//
+        }
+        else {
+            deviceRenewalRequestsPaging = this.deviceRenewalRequestRepository.findAllForSearching(genericRequestBody,pageRequest);
+        }
+
+        if(deviceRenewalRequestsPaging != null && !deviceRenewalRequestsPaging.isEmpty()) {
 
             List<DeviceRenewalResponseDTO> deviceRenewalResponse = deviceRenewalRequestsPaging
                     .get()
                     .map(object -> {
                         DeviceRenewalResponseDTO deviceRenewalResponseDTO = new DeviceRenewalResponseDTO();
                         try {
+
                             Optional<User> user = userRepository.findById(object.getCreatedBy());
                             if (user.isPresent()) {
+                                deviceRenewalResponseDTO.setRequestId(object.getId());
                                 deviceRenewalResponseDTO.setRequestCode(object.getReqCode());
                                 deviceRenewalResponseDTO.setCreatedBy(user.get().getName());
                                 deviceRenewalResponseDTO.setRequestDate(object.getCreatedAt());
@@ -293,46 +285,67 @@ public class DeviceRenewalRequestServiceImpl implements DeviceRenewalRequestServ
             paginationV2.setTotalItems(deviceRenewalRequestsPaging.getTotalElements());
             paginationV2.setPageSize(genericRequestBody.getPageSize());
             paginationV2.setItems(deviceRenewalResponse);
-        } else {
+        }else {
             paginationV2.setItems(new ArrayList<>());
         }
 
-        return paginationV2;
+
+        return  paginationV2;
     }
 
     @Override
-    public PaginationV2<?> getDeviceRenewalRequest(String reqCode, int pageNo, int pageSize) {
+    public Response<?> getDeviceRenewalRequest(Long reqId) {
 
-        Optional<DeviceRenewalRequest> byReqCode = null;
-        if (reqCode != null && !reqCode.equals("") && !reqCode.isEmpty()) {
+        //for end response
+        Response<List> response = new Response<>();
 
-            byReqCode = this.deviceRenewalRequestRepository.findByReqCode(reqCode);
+
+        DeviceRenewalRequest request = null;
+        List<RenewalDevice> allByRequestId = null;
+
+        if(reqId != 0){
+            if(renewalRequestsMap.get(reqId) != null)
+            {
+                request = renewalRequestsMap.get(reqId);
+                logger.info("Inside the mapping for request");
+            }
+            else{
+                request = this.deviceRenewalRequestRepository.findById(reqId).get();
+                renewalRequestsMap.put(reqId,request);
+                logger.info("Inside the repo and mapping for request");
+            }
         }
-        PaginationV2 paginationV2 = new PaginationV2();
 
-        if (byReqCode != null && byReqCode.isPresent()) {
+        if(request != null){
 
-            DeviceRenewalRequest deviceRenewalRequest = byReqCode.get();
             try {
 
-                if (pageSize == 0 && pageNo == 0) {
-                    List<RenewalDevice> allByRequestId = this.renewalDeviceRepository.findAllByRequestId(deviceRenewalRequest.getId());
-                    paginationV2.setItems(allByRequestId);
-                    paginationV2.setTotalItems(allByRequestId.size());
-                } else {
-                    Pageable pageRequest = PageRequest.of(pageNo, pageSize, Sort.Direction.ASC, "id");
-                    Page<RenewalDevice> allByRequestId = this.renewalDeviceRepository.findAllByRequestId(deviceRenewalRequest.getId(), pageRequest);
-                    paginationV2.setItems(allByRequestId.getContent());
-                    paginationV2.setTotalItems(allByRequestId.getTotalElements());
+                if(renewalDevicesList.get(reqId) != null){
+                    allByRequestId = renewalDevicesList.get(reqId);
+                    logger.info("Inside the mapping for renewal Device list");
                 }
-                paginationV2.setPageSize(pageSize);
-            } catch (NoSuchElementException e) {
-                throw new ResourceNotFoundException("No Request Present with Request Code : " + reqCode);
-            }
-        } else {
-            paginationV2.setItems(new ArrayList<>());
-        }
-        return paginationV2;
-    }
+                else {
+                    allByRequestId = this.renewalDeviceRepository.findAllByRequestId(reqId);
 
+                    renewalDevicesList.put(reqId,allByRequestId);
+
+                    logger.info("Inside the repo and mapping for renewal Device list");
+                }
+
+                response.setMessage("Task Completed");
+                response.setRequestCode(HttpStatus.OK.getReasonPhrase());
+                response.setResponseCode(HttpStatus.OK.value());
+                response.setData(allByRequestId);
+
+            }catch (NoSuchElementException e){
+                throw new ResourceNotFoundException("No Request Present with Request Id : "+reqId);
+            }
+        }else {
+            response.setMessage("No DATA");
+            response.setRequestCode(HttpStatus.NOT_FOUND.getReasonPhrase());
+            response.setResponseCode(HttpStatus.NOT_FOUND.value());
+            response.setData(new ArrayList<>());
+        }
+        return response;
+    }
 }

@@ -8,6 +8,7 @@ import com.watsoo.device.management.enums.StatusMaster;
 
 public class GenericRequestBody {
 
+	private Long requestId;
 	private String version;
 
 	private Integer pageNo;
@@ -173,9 +174,32 @@ public class GenericRequestBody {
 	private Boolean isBoxSearch;
 	
 	private String reConfigBoxCode;
+	private Date fromDateToDateType;
+	private Date toDateToDateType;
 
+	public Date getFromDateToDateType ( ) {
+		return fromDateToDateType;
+	}
 
+	public void setFromDateToDateType ( Date fromDateToDateType ) {
+		this.fromDateToDateType = fromDateToDateType;
+	}
 
+	public Date getToDateToDateType ( ) {
+		return toDateToDateType;
+	}
+
+	public void setToDateToDateType ( Date toDateToDateType ) {
+		this.toDateToDateType = toDateToDateType;
+	}
+
+	public Long getRequestId ( ) {
+		return requestId;
+	}
+
+	public void setRequestId ( Long requestId ) {
+		this.requestId = requestId;
+	}
 
 	public Long getMasterId() {
 		return masterId;

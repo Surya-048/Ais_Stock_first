@@ -24,7 +24,7 @@ import com.watsoo.device.management.model.Device;
 public interface DeviceRepository extends JpaRepository<Device, Long> {
 
 	Optional<Device> findByImeiNo(String imeiNo);
-
+	List<Device>  findByIccidNoIn(List<String> iccidNo);
 	Optional<Device> findByIccidNo(String iccidNo);
 
 	default Page<Device> findAll(GenericRequestBody genericRequestBody, Pageable pageRequest) {

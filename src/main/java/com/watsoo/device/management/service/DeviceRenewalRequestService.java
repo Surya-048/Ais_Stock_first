@@ -11,5 +11,5 @@ public interface DeviceRenewalRequestService {
 
     PaginationV2<?> getDeviceRenewalRequest(GenericRequestBody genericRequestBody);
 
-    PaginationV2<?> getDeviceRenewalRequest(String reqCode,int pageNo,int pageSize);
+    Response<?> getDeviceRenewalRequest(Long id);
 }

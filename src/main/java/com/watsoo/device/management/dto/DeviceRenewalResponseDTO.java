@@ -11,7 +11,16 @@ public class DeviceRenewalResponseDTO {
     private Date requestDate;
     private String createdBy;
     private int totalDevices;
+    private  Long requestId;
     private List<RenewalDevice> devices;
+
+    public Long getRequestId ( ) {
+        return requestId;
+    }
+
+    public void setRequestId ( Long requestId ) {
+        this.requestId = requestId;
+    }
 
     public String getRequestCode() {
         return requestCode;
